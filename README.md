@@ -1,6 +1,7 @@
-# ldtageditor-v2
-Lego Dimensions Tag Editor - Updated
+# ldtageditor-v2-2025
+Lego Dimensions Tag Editor - 2025
 
-This is an update version of the Lego Dimensions Tag Editor.
+I will attempt to update this app to Android 14 and Android 15, as the way to handle NFC was changed.
+My kid loves LD, but my tags start to fail and I want to recover them, so updating the app is my only hope.
 
-There was an issue where if an android phone does not provide the MifareUltralight NFC api, the app simply does not work.  I replaced all API calls to this with calls to the NfcA API, which all phones with NFC capability on android are required to support.  This fixes the issues I had with the app.
+I want to keep compatibility with older Android versions, so I want to keep the old code for older versions and if/then the new code for Android14 and 15.
