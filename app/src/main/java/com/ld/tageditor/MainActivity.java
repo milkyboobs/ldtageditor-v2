@@ -12,84 +12,105 @@ import android.os.Bundle;
 import android.util.Log;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
-    MainActivity activity = this;
     private IntentFilter[] mFilters;
     private PendingIntent mPendingIntent;
     private String[][] mTechLists;
-    NfcAdapter nfc;
-    public Tag tag;
-    WebView webView;
+    private NfcAdapter nfc;
+    private Tag tag;
+    private WebView webView;
 
-    /* Access modifiers changed, original: protected */
+    public Tag getTag() {
+        return tag;
+    }
+
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        this.mPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(536870912), 0);
+
+        // Updated PendingIntent with FLAG_MUTABLE for Android 14+
+        this.mPendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_MUTABLE
+        );
+
         try {
-            new IntentFilter("android.nfc.action.NDEF_DISCOVERED").addDataType("*/*");
-            this.mFilters = new IntentFilter[]{new IntentFilter("android.nfc.action.NDEF_DISCOVERED")};
-            String[][] strArr = new String[1][];
-            strArr[0] = new String[]{NfcA.class.getName()};
-            this.mTechLists = strArr;
+            IntentFilter ndefFilter = new IntentFilter("android.nfc.action.NDEF_DISCOVERED");
+            ndefFilter.addDataType("*/*");
+            this.mFilters = new IntentFilter[]{ndefFilter};
+
+            this.mTechLists = new String[][]{{NfcA.class.getName()}};
             this.nfc = NfcAdapter.getDefaultAdapter(this);
-            this.webView = (WebView) findViewById(R.id.webView);
+
+            this.webView = findViewById(R.id.webView);
             this.webView.getSettings().setJavaScriptEnabled(true);
             this.webView.getSettings().setAllowFileAccess(true);
-            this.webView.getSettings().setAllowFileAccessFromFileURLs(true);
-            this.webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+            this.webView.getSettings().setAllowFileAccessFromFileURLs(false); // More secure
+            this.webView.getSettings().setAllowUniversalAccessFromFileURLs(false); // More secure
+
             this.webView.setWebChromeClient(new WebChromeClient() {
                 public void onProgressChanged(WebView view, int progress) {
-                    MainActivity.this.activity.setProgress(progress * 100);
+                    setProgress(progress * 100);
                 }
             });
+
             this.webView.setWebViewClient(new WebViewClient() {
-                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    String url = request.getUrl().toString();
                     String host = Uri.parse(url).getHost();
-                    ArrayList<String> allowedHosts = new ArrayList();
+                    ArrayList<String> allowedHosts = new ArrayList<>();
                     allowedHosts.add("android_asset");
                     allowedHosts.add("127.0.0.1");
-                    ArrayList<String> allowedSubstring = new ArrayList();
+
+                    ArrayList<String> allowedSubstring = new ArrayList<>();
                     allowedSubstring.add("192.168.");
+
                     if (allowedHosts.contains(host)) {
                         return false;
                     }
-                    Iterator i$ = allowedSubstring.iterator();
-                    while (i$.hasNext()) {
-                        if (host.startsWith((String) i$.next())) {
+                    for (String prefix : allowedSubstring) {
+                        if (host.startsWith(prefix)) {
                             return false;
                         }
                     }
-                    view.evaluateJavascript("(function(){ var err = 'ACCESS TO URL " + url + " DENIED'; console.error(err); if(window.appErrorHandler) window.appErrorHandler(err); })();", new ValueCallback<String>() {
-                        public void onReceiveValue(String s) {
-                        }
-                    });
+
+                    view.evaluateJavascript("(function(){ var err = 'ACCESS TO URL " + url +
+                            " DENIED'; console.error(err); if(window.appErrorHandler) " +
+                            "window.appErrorHandler(err); })();", null);
+
                     return true;
                 }
             });
+
             WebView.setWebContentsDebuggingEnabled(true);
             this.webView.addJavascriptInterface(new JSAPI(this, this.webView), "AndroidApp");
             this.webView.loadUrl("file:///android_asset/index.html");
+
         } catch (MalformedMimeTypeException e) {
-            throw new RuntimeException("fail", e);
+            throw new RuntimeException("Failed to initialize NFC", e);
         }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        if (this.nfc != null) {
+        if (this.nfc != null && this.nfc.isEnabled()) {
             this.nfc.enableForegroundDispatch(this, this.mPendingIntent, this.mFilters, this.mTechLists);
+        } else {
+            Log.e(TAG, "NFC is not enabled!");
         }
     }
 
@@ -104,32 +125,32 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        this.tag = (Tag) intent.getParcelableExtra("android.nfc.extra.TAG");
-        Log.i("Foreground dispatch", "Discovered tag");
-        callJavaScript("AndroidApp.tagDetected", new Object[0]);
+        tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+        Log.i("NFC", "Tag detected: " + tag);
+
+        if (tag != null) {
+            Log.i("NFC", "Calling JavaScript function...");
+            callJavaScript("AndroidApp.tagDetected", "NFC tag found");
+        }
     }
+
 
     private void callJavaScript(String methodName, Object... params) {
         Log.i(TAG, "CallJS Building string...");
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append("javascript:try{(window.");
-        stringBuilder.append(methodName);
-        stringBuilder.append("||console.warn.bind(console,'UNHANDLED','");
-        stringBuilder.append(methodName);
-        stringBuilder.append("'))(");
+        stringBuilder.append("javascript:try{(window.")
+                .append(methodName)
+                .append("||console.warn.bind(console,'UNHANDLED','")
+                .append(methodName)
+                .append("'))(");
+
         for (Object param : params) {
-            String param2 = "";
-            if (!(param instanceof String)) {
-                param2 = param.toString();
-            }
-            stringBuilder.append("'");
-            stringBuilder.append(param2);
-            stringBuilder.append("'");
-            stringBuilder.append(",");
+            String paramStr = (param instanceof String) ? "'" + param + "'" : param.toString();
+            stringBuilder.append(paramStr).append(",");
         }
-        stringBuilder.append("''");
-        stringBuilder.append(")}catch(error){console.error('ANDROID APP ERROR',error);}");
+        stringBuilder.append("''").append(")}catch(error){console.error('ANDROID APP ERROR',error);}");
+
         this.webView.loadUrl(stringBuilder.toString());
-        Log.i(TAG, "CallJS" + stringBuilder.toString());
+        Log.i(TAG, "CallJS: " + stringBuilder);
     }
 }

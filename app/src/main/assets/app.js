@@ -66467,3 +66467,20 @@ app.controller('MainController', MainController);
 app.controller('UpgradeController', UpgradeController);
 
 },{"./API":43,"./MainController.js":45,"./UpgradeController.js":46,"angular":18,"angular-material":16,"node-ld":24}]},{},[48]);
+
+window.AndroidApp = window.AndroidApp || {};  // Ensure interface exists
+
+window.AndroidApp.tagDetected = function (data) {
+    console.log("JavaScript received NFC data: " + data);
+    alert("NFC Tag Detected: " + data);
+
+    if (!angular.element(document.body).scope()) {
+        console.error("Angular scope not found!");
+        return;
+    }
+
+    var scope = angular.element(document.body).scope();
+    scope.$apply(function () {
+        scope.main.token.uid = data; // Store tag UID in AngularJS
+    });
+};

@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.ld.tageditor">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- Required for NFC foreground dispatch -->
     <uses-feature android:name="android.hardware.nfc" android:required="true" />
+
+    <!-- Queries for NFC services (Important for Android 11+) -->
+    <queries>
+        <intent>
+            <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+        </intent>
+        <intent>
+            <action android:name="android.nfc.action.TECH_DISCOVERED" />
+        </intent>
+    </queries>
 
     <application
         android:label="LEGO Tag Editor"
@@ -13,18 +25,30 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:supportsRtl="true">
+
         <activity
             android:name="com.ld.tageditor.MainActivity"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:exported="true"> <!-- REQUIRED for Android 12+ -->
+
+            <!-- Main Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- NFC Tag Discovery -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
+                <data android:mimeType="application/octet-stream" /> <!-- More accurate NFC MIME type -->
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
         </activity>
     </application>
 </manifest>
